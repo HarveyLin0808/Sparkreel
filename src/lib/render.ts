@@ -212,10 +212,40 @@ export async function renderProject(
 
   const fileName = safeVideoFileName(project.title, version);
   const output = path.join(root, fileName);
-  if (hasNarration) {
+
+  // 可选的背景音乐：下载到临时目录，循环铺满整段视频。
+  let musicFile: string | undefined;
+  if (project.musicUrl) {
+    musicFile = path.join(temp, project.musicUrl.toLowerCase().endsWith(".wav") ? "music.wav" : "music.mp3");
+    await materialize(project.musicUrl, musicFile);
+  }
+  const musicVolume = typeof project.musicVolume === "number"
+    ? Math.min(1, Math.max(0, project.musicVolume))
+    : 0.18;
+
+  if (hasNarration && musicFile) {
+    // 人声做响度归一，背景乐压低并用 sidechain ducking 在说话时让位。
+    await run(ffmpeg, [
+      "-y", "-i", subtitled, "-i", narration, "-stream_loop", "-1", "-i", musicFile,
+      "-filter_complex",
+      `[1:a]loudnorm=I=-16:TP=-1.5:LRA=11,apad[voice];`
+      + `[2:a]volume=${musicVolume}[bg];`
+      + `[bg][voice]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=300[duck];`
+      + `[duck][voice]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`,
+      "-map", "0:v", "-map", "[aout]",
+      "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", String(renderDuration), output,
+    ]);
+  } else if (hasNarration) {
     await run(ffmpeg, [
       "-y", "-i", subtitled, "-i", narration,
       "-filter:a", "loudnorm=I=-16:TP=-1.5:LRA=11,apad",
+      "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", String(renderDuration), output,
+    ]);
+  } else if (musicFile) {
+    await run(ffmpeg, [
+      "-y", "-i", subtitled, "-stream_loop", "-1", "-i", musicFile,
+      "-filter:a", `volume=${musicVolume}`,
+      "-map", "0:v", "-map", "1:a",
       "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", String(renderDuration), output,
     ]);
   } else {

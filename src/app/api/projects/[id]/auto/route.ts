@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { buildPexelsQueries, searchPexelsVideoWithFallback } from "@/lib/pexels";
+import { searchPixabayVideoWithFallback } from "@/lib/pixabay";
 import { expandNarration } from "@/lib/providers/llm";
 import { ensureRenderHistory, nextRenderVersion, renderProject } from "@/lib/render";
 import { getStorage } from "@/lib/storage";
@@ -39,25 +40,50 @@ export async function POST(_: Request, context: Context) {
     const usedPexelsIds = new Set<number>();
     for (let index = 0; index < project.scenes.length; index++) {
       const scene = project.scenes[index];
-      const existingPexelsId = scene.assetName?.match(/^pexels-(\d+)\.mp4$/)?.[1];
+      const existingPexelsId = scene.assetName?.match(/^(?:pexels|pixabay)-(\d+)\.mp4$/)?.[1];
       const isDuplicate = existingPexelsId ? usedPexelsIds.has(Number(existingPexelsId)) : false;
       if (!scene.assetUrl || isDuplicate) {
-        const { video, file } = await searchPexelsVideoWithFallback(
-          buildPexelsQueries(scene.prompt, project.materialPreference ?? "CHINESE", index),
-          usedPexelsIds,
-        );
-        const response = await fetch(file.link, { signal: AbortSignal.timeout(120_000) });
+        const queries = buildPexelsQueries(scene.prompt, project.materialPreference ?? "CHINESE", index);
+        let downloadUrl: string;
+        let sourceUrl: string | undefined;
+        let sourceAuthor: string | undefined;
+        let sourceAuthorUrl: string | undefined;
+        let assetName: string;
+        let provider: "PEXELS" | "PIXABAY";
+        let dedupeId: number;
+        try {
+          const { video, file } = await searchPexelsVideoWithFallback(queries, usedPexelsIds);
+          downloadUrl = file.link;
+          sourceUrl = video.url;
+          sourceAuthor = video.user?.name;
+          sourceAuthorUrl = video.user?.url;
+          assetName = `pexels-${video.id}.mp4`;
+          provider = "PEXELS";
+          dedupeId = video.id;
+        } catch (pexelsError) {
+          // Pexels 没找到或未配置 key 时，回退到 Pixabay 视频。
+          if (!process.env.PIXABAY_API_KEY) throw pexelsError;
+          const { video, rendition } = await searchPixabayVideoWithFallback(queries, usedPexelsIds);
+          downloadUrl = rendition.url;
+          sourceUrl = video.pageURL;
+          sourceAuthor = video.user;
+          sourceAuthorUrl = video.user ? `https://pixabay.com/users/${video.user}/` : undefined;
+          assetName = `pixabay-${video.id}.mp4`;
+          provider = "PIXABAY";
+          dedupeId = video.id;
+        }
+        const response = await fetch(downloadUrl, { signal: AbortSignal.timeout(120_000) });
         if (!response.ok) throw new Error(`镜头 ${scene.order} 素材下载失败 (${response.status})`);
         const bytes = new Uint8Array(await response.arrayBuffer());
-        const key = `projects/${id}/${scene.id}/auto-pexels-${video.id}.mp4`;
+        const key = `projects/${id}/${scene.id}/auto-${provider.toLowerCase()}-${dedupeId}.mp4`;
         scene.assetUrl = await getStorage().put(key, bytes, "video/mp4");
-        scene.assetName = `pexels-${video.id}.mp4`;
+        scene.assetName = assetName;
         scene.assetKind = "VIDEO";
-        scene.assetProvider = "PEXELS";
-        scene.sourceUrl = video.url;
-        scene.sourceAuthor = video.user?.name;
-        scene.sourceAuthorUrl = video.user?.url;
-        usedPexelsIds.add(video.id);
+        scene.assetProvider = provider;
+        scene.sourceUrl = sourceUrl;
+        scene.sourceAuthor = sourceAuthor;
+        scene.sourceAuthorUrl = sourceAuthorUrl;
+        usedPexelsIds.add(dedupeId);
       } else if (existingPexelsId) {
         usedPexelsIds.add(Number(existingPexelsId));
       }

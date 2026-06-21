@@ -4,6 +4,9 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { MaterialPreference, Project, ProjectStatus, Scene, VisualStyle } from "@/lib/types";
 import { nextProjectStatus } from "@/lib/workflow";
 import { RENDER_STAGES, renderStageIndex, type RenderStageKey } from "@/lib/render-stages";
+import { CURATED_SOURCES } from "@/lib/curated-audio";
+import type { JamendoTrack } from "@/lib/jamendo";
+import type { FreesoundClip } from "@/lib/freesound";
 
 type RenderState = { progress: number; stage?: RenderStageKey };
 
@@ -52,6 +55,18 @@ export function Studio() {
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [renderState, setRenderState] = useState<RenderState | null>(null);
   const pollStopRef = useRef<(() => void) | null>(null);
+  const [musicQuery, setMusicQuery] = useState("calm emotional piano");
+  const [musicResults, setMusicResults] = useState<JamendoTrack[]>([]);
+  const [sfxQuery, setSfxQuery] = useState("");
+  const [sfxResults, setSfxResults] = useState<FreesoundClip[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  function playAudio(url: string) {
+    audioRef.current?.pause();
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.play().catch(() => setNotice("无法播放该音频"));
+  }
 
   // 生成期间轮询项目进度，驱动步骤与进度条显示。
   function startProgressPolling(projectId: string, initial?: RenderState) {
@@ -288,6 +303,115 @@ export function Studio() {
       setNotice(error instanceof Error ? error.message : "Pexels 素材搜索失败");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function fetchPixabayAsset(scene: Scene, kind: "video" | "illustration" | "photo") {
+    if (!active) return;
+    const label = kind === "video" ? "视频" : kind === "illustration" ? "插画" : "图片";
+    setBusy(true);
+    setNotice(`正在为镜头 ${scene.order} 搜索 Pixabay ${label}...`);
+    try {
+      const data = await jsonRequest<{ project: Project }>(
+        `/api/projects/${active.id}/scenes/${scene.id}/pixabay`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) },
+      );
+      syncProject(data.project);
+      setNotice(`镜头 ${scene.order} 已使用 Pixabay ${label}`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Pixabay 素材搜索失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function searchMusic() {
+    setNotice("正在搜索 Jamendo 配乐...");
+    try {
+      const data = await jsonRequest<{ tracks: JamendoTrack[] }>(
+        `/api/projects/${active?.id ?? "x"}/music?q=${encodeURIComponent(musicQuery)}`,
+      );
+      setMusicResults(data.tracks);
+      setNotice(data.tracks.length ? `找到 ${data.tracks.length} 首配乐，试听后选用` : "没有找到匹配的配乐，换个关键词试试");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Jamendo 搜索失败");
+    }
+  }
+
+  async function applyMusicTrack(track: JamendoTrack) {
+    if (!active) return;
+    setBusy(true);
+    setNotice(`正在加入配乐《${track.name}》...`);
+    try {
+      const data = await jsonRequest<{ project: Project }>(`/api/projects/${active.id}/music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id, audioUrl: track.audioUrl, name: `${track.name} · ${track.artistName}`, sourceUrl: track.shareUrl }),
+      });
+      syncProject(data.project);
+      setNotice("背景音乐已设置，重新生成视频即可合成进去");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "设置配乐失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadMusic(file?: File) {
+    if (!active || !file) return;
+    setBusy(true);
+    setNotice("正在上传背景音乐...");
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const data = await jsonRequest<{ project: Project }>(`/api/projects/${active.id}/music`, { method: "POST", body: form });
+      syncProject(data.project);
+      setNotice("背景音乐已上传，重新生成视频即可合成进去");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "上传配乐失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearMusic() {
+    if (!active) return;
+    try {
+      const data = await jsonRequest<{ project: Project }>(`/api/projects/${active.id}/music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear: true }),
+      });
+      syncProject(data.project);
+      setNotice("已移除背景音乐");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "移除配乐失败");
+    }
+  }
+
+  async function changeMusicVolume(volume: number) {
+    if (!active) return;
+    setActive({ ...active, musicVolume: volume });
+    try {
+      await jsonRequest<{ project: Project }>(`/api/projects/${active.id}/music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ volume }),
+      });
+    } catch {
+      /* 音量保存失败忽略，下次设置时再同步 */
+    }
+  }
+
+  async function searchSfx() {
+    if (!sfxQuery.trim()) return;
+    setNotice("正在搜索 Freesound 音效...");
+    try {
+      const data = await jsonRequest<{ clips: FreesoundClip[] }>(`/api/audio/sfx?q=${encodeURIComponent(sfxQuery)}`);
+      setSfxResults(data.clips);
+      setNotice(data.clips.length ? `找到 ${data.clips.length} 个音效，试听后下载` : "没有找到匹配的音效");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Freesound 搜索失败");
     }
   }
 
@@ -544,7 +668,7 @@ export function Studio() {
                   <div className="asset-progress"><span style={{ width: `${completedAssets / active.scenes.length * 100}%` }} /><small>{completedAssets} 个素材已就绪</small></div>
                 </div>
                   <div className="scene-list">{active.scenes.map((scene) => (
-                  <SceneCard key={`${scene.id}-${scene.order}-${scene.duration}-${scene.narration}-${scene.prompt}`} scene={scene} onSave={updateScene} onUpload={upload} onPexels={fetchPexelsAsset} onDelete={deleteScene} onAddAfter={addScene} onNotice={setNotice} />
+                  <SceneCard key={`${scene.id}-${scene.order}-${scene.duration}-${scene.narration}-${scene.prompt}`} scene={scene} onSave={updateScene} onUpload={upload} onPexels={fetchPexelsAsset} onPixabay={fetchPixabayAsset} onDelete={deleteScene} onAddAfter={addScene} onNotice={setNotice} />
                 ))}</div>
                 <div className="sticky-action">
                   <span>{completedAssets === active.scenes.length ? "全部镜头素材已经就绪" : `还需上传 ${active.scenes.length - completedAssets} 个镜头素材`}</span>
@@ -560,6 +684,7 @@ export function Studio() {
             )}
 
             {tab === "publish" && (
+              <>
               <div className="publish-grid">
                 <section className="phone-panel">
                   <div className="phone">
@@ -612,6 +737,86 @@ export function Studio() {
                   <p className="export-note">发布包包含平台文案、字幕、封面提示词与渲染清单。正式环境配置 FFmpeg worker 后同时包含 MP4。</p>
                 </section>
               </div>
+
+              <section className="audio-studio">
+                <div className="audio-block">
+                  <p className="section-label">背景音乐（Jamendo · 免费可商用）</p>
+                  {active.musicUrl ? (
+                    <div className="music-current">
+                      <div>
+                        <strong>{active.musicName ?? "已设置背景音乐"}</strong>
+                        <small>{active.musicProvider === "JAMENDO" ? "Jamendo" : "本地上传"}</small>
+                      </div>
+                      <div className="music-current-actions">
+                        <button type="button" className="secondary" onClick={() => playAudio(active.musicUrl!)}>▷ 试听</button>
+                        {active.musicSourceUrl && <a href={active.musicSourceUrl} target="_blank" rel="noreferrer">来源</a>}
+                        <button type="button" className="danger-text" onClick={clearMusic}>移除</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="empty-small">还没有背景音乐。搜索 Jamendo 或上传一段 BGM，重新生成视频即可混入（说话时自动压低让位人声）。</p>
+                  )}
+                  <label className="music-volume">
+                    音乐音量 {Math.round((active.musicVolume ?? 0.18) * 100)}%
+                    <input type="range" min={0} max={60} value={Math.round((active.musicVolume ?? 0.18) * 100)}
+                      onChange={(event) => changeMusicVolume(Number(event.target.value) / 100)} />
+                  </label>
+                  <div className="audio-search">
+                    <input value={musicQuery} onChange={(event) => setMusicQuery(event.target.value)}
+                      onKeyDown={(event) => event.key === "Enter" && searchMusic()} placeholder="如 calm piano / emotional / cinematic" />
+                    <button type="button" className="secondary" onClick={searchMusic}>搜索配乐</button>
+                    <label className="upload-music secondary">上传 BGM
+                      <input type="file" accept="audio/mpeg,audio/wav" onChange={(event) => uploadMusic(event.target.files?.[0])} />
+                    </label>
+                  </div>
+                  {!!musicResults.length && (
+                    <ul className="audio-results">
+                      {musicResults.map((track) => (
+                        <li key={track.id}>
+                          <span className="audio-name"><strong>{track.name}</strong><small>{track.artistName} · {Math.round(track.duration)}s</small></span>
+                          <button type="button" onClick={() => playAudio(track.audioUrl)}>▷ 试听</button>
+                          <button type="button" className="link-button" onClick={() => applyMusicTrack(track)} disabled={busy}>选用</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="audio-block">
+                  <p className="section-label">音效（Freesound）</p>
+                  <p className="empty-small">音效需要按画面节奏手动放置：试听满意后下载，再到分镜里作为素材上传或在后期使用。</p>
+                  <div className="audio-search">
+                    <input value={sfxQuery} onChange={(event) => setSfxQuery(event.target.value)}
+                      onKeyDown={(event) => event.key === "Enter" && searchSfx()} placeholder="如 whoosh / rain / page turn / notification" />
+                    <button type="button" className="secondary" onClick={searchSfx}>搜索音效</button>
+                  </div>
+                  {!!sfxResults.length && (
+                    <ul className="audio-results">
+                      {sfxResults.map((clip) => (
+                        <li key={clip.id}>
+                          <span className="audio-name"><strong>{clip.name}</strong><small>{clip.username} · {Math.round(clip.duration)}s</small></span>
+                          <button type="button" onClick={() => playAudio(clip.previewUrl)}>▷ 试听</button>
+                          <a className="link-button" href={clip.pageUrl} target="_blank" rel="noreferrer">下载页</a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="audio-block">
+                  <p className="section-label">外部素材库（无 API · 手动下载）</p>
+                  <ul className="curated-list">
+                    {CURATED_SOURCES.map((source) => (
+                      <li key={source.url}>
+                        <a href={source.url} target="_blank" rel="noreferrer"><strong>{source.name}</strong><span className="curated-kind">{source.kind}</span></a>
+                        <small>{source.note}</small>
+                        <em>{source.license}</em>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+              </>
             )}
           </>
         )}
@@ -655,11 +860,12 @@ function RenderProgress({ state }: { state: RenderState }) {
   );
 }
 
-function SceneCard({ scene, onSave, onUpload, onPexels, onDelete, onAddAfter, onNotice }: {
+function SceneCard({ scene, onSave, onUpload, onPexels, onPixabay, onDelete, onAddAfter, onNotice }: {
   scene: Scene;
   onSave: (scene: Scene, payload: Partial<Scene>) => void;
   onUpload: (scene: Scene, file?: File) => void;
   onPexels: (scene: Scene) => void;
+  onPixabay: (scene: Scene, kind: "video" | "illustration" | "photo") => void;
   onDelete: (scene: Scene) => void;
   onAddAfter: (afterOrder?: number) => void;
   onNotice: (message: string) => void;
@@ -694,7 +900,9 @@ function SceneCard({ scene, onSave, onUpload, onPexels, onDelete, onAddAfter, on
         </label>
         <div className="scene-tools">
           <button type="button" onClick={() => navigator.clipboard.writeText(draft.prompt).then(() => onNotice("提示词已复制"))}>复制提示词</button>
-          <button type="button" onClick={() => onPexels(scene)}>搜索 Pexels 视频</button>
+          <button type="button" onClick={() => onPexels(scene)}>Pexels 视频</button>
+          <button type="button" onClick={() => onPixabay(scene, "video")}>Pixabay 视频</button>
+          <button type="button" onClick={() => onPixabay(scene, "illustration")}>Pixabay 插画</button>
           <button type="button" onClick={() => onAddAfter(scene.order)}>在后面加镜头</button>
           <button type="button" className="danger" onClick={() => onDelete(scene)}>删除镜头</button>
           {scene.assetProvider === "PEXELS" && scene.sourceUrl && (

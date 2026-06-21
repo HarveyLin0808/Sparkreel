@@ -49,7 +49,7 @@ export interface Scene {
   assetUrl?: string;
   assetName?: string;
   assetKind?: MediaKind;
-  assetProvider?: "UPLOAD" | "AI" | "PEXELS";
+  assetProvider?: "UPLOAD" | "AI" | "PEXELS" | "PIXABAY";
   sourceUrl?: string;
   sourceAuthor?: string;
   sourceAuthorUrl?: string;
@@ -91,4 +91,9 @@ export interface Project extends ProjectInput, ContentPlan {
   outputUrl?: string;
   outputDuration?: number;
   renderOutputs?: RenderOutput[];
+  musicUrl?: string;
+  musicName?: string;
+  musicProvider?: "JAMENDO" | "UPLOAD";
+  musicSourceUrl?: string;
+  musicVolume?: number;
 }

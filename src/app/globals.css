@@ -74,6 +74,34 @@ textarea, input, select { width: 100%; border: 1px solid #d9d6cd; background: #f
 .render-step.active .render-step-text strong { color: var(--green); }
 .render-step.done .render-step-dot { border-color: var(--green); color: white; background: var(--green); }
 @keyframes render-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(215, 119, 85, .5); } 50% { box-shadow: 0 0 0 6px rgba(215, 119, 85, 0); } }
+.audio-studio { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 22px; }
+.audio-block { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow); }
+.music-current { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; background: #f1f6f2; border-radius: 10px; }
+.music-current strong { display: block; font-size: 12px; }
+.music-current small { color: var(--muted); font-size: 10px; }
+.music-current-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.music-current-actions a { color: var(--muted); font-size: 10px; text-decoration: none; }
+.music-volume { display: block; margin: 14px 0 10px; font-size: 11px; color: var(--muted); }
+.music-volume input { margin-top: 6px; }
+.audio-search { display: flex; gap: 8px; align-items: stretch; margin: 10px 0; }
+.audio-search input { flex: 1; min-width: 0; padding: 9px 11px; }
+.audio-search .secondary { white-space: nowrap; }
+.upload-music { position: relative; display: inline-flex; align-items: center; cursor: pointer; padding: 9px 14px; border-radius: 10px; font-size: 13px; }
+.upload-music input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.audio-results { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+.audio-results li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.audio-name { flex: 1; min-width: 0; }
+.audio-name strong { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.audio-name small { color: var(--muted); font-size: 10px; }
+.audio-results button, .link-button { border: 0; background: none; color: var(--green); font-size: 11px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.audio-results button:disabled { opacity: .5; }
+.danger-text { border: 0; background: none; color: #a84435; font-size: 11px; font-weight: 700; cursor: pointer; }
+.curated-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
+.curated-list li { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.curated-list a { display: flex; align-items: center; gap: 8px; color: var(--green); text-decoration: none; font-size: 13px; }
+.curated-kind { background: var(--green-2); color: var(--green); border-radius: 99px; padding: 1px 8px; font-size: 9px; }
+.curated-list small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.curated-list em { color: #8b928f; font-size: 9px; font-style: normal; }
 .scene-tools { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .scene-tools button { border: 0; border-radius: 7px; padding: 6px 9px; color: var(--green); background: var(--green-2); font-size: 10px; }
 .scene-tools button.danger { color: #a84435; background: #f4dfda; }

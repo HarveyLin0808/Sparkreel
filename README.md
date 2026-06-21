@@ -213,8 +213,11 @@ EDGE_TTS_PATH=C:\path\to\edge-tts.exe
 EDGE_TTS_VOICE=zh-CN-XiaoyiNeural
 EDGE_TTS_RATE=-5%
 
-# 素材
+# 素材与音频
 PEXELS_API_KEY=
+PIXABAY_API_KEY=
+JAMENDO_CLIENT_ID=
+FREESOUND_API_KEY=
 ALLOW_MOCK_RENDER=false
 ```
 
@@ -355,10 +358,19 @@ Sparkreel 在生成阶段就会为**抖音、小红书、视频号**三个平台
 - 语速通过 `EDGE_TTS_RATE` 控制（如 `-5%`），界面也提供舒缓/自然偏慢/自然/明快四档。
 - 也支持本地 **Piper** 模型（`PIPER_PATH` / `PIPER_MODEL`）。
 
-### 素材（Pexels）
+### 素材与音频来源
 
-- 配置 `PEXELS_API_KEY` 后即可一键搜索竖屏动态素材。
-- 「中国风」偏好会优先检索 `chinese woman` / `chinese man` / `chinese portrait` / `china street` / `beijing street` / `shanghai street` 等关键词。
+| 来源 | API | 用途 | 接入方式 |
+|---|---|---|---|
+| **Pexels** | `PEXELS_API_KEY` | 主视频素材（竖屏动态） | 分镜「Pexels 视频」/ 一键生成主通道 |
+| **Pixabay** | `PIXABAY_API_KEY` | 插画 / 备用图片 / 备用视频 | 分镜「Pixabay 视频 / 插画」；一键生成时 Pexels 失败自动回退到 Pixabay 视频 |
+| **Jamendo** | `JAMENDO_CLIENT_ID` | 免费可商用配乐 BGM | 审核与发布页「背景音乐」搜索 / 选用，渲染时混入（说话自动 ducking 让位人声） |
+| **Freesound** | `FREESOUND_API_KEY` | 音效搜索 / 试听 / 下载 | 审核与发布页「音效」搜索；按节奏手动放置 |
+| **Mixkit / YouTube 音频库** | ❌ 无公开 API | 镜头感配乐 / 音效 / 空镜 | 界面提供官方直达链接，手动下载后上传 |
+
+- 所有 key 均为免费申请，未配置时对应入口会提示「未配置 XXX」，不影响其他功能。
+- 背景音乐支持本地上传（MP3/WAV），Mixkit / YouTube 音频库下载的文件可经此加入。
+- 「中国风」偏好会优先检索 `chinese woman` / `chinese man` / `chinese portrait` / `china street` / `beijing street` / `shanghai street` 等关键词（Pexels 与 Pixabay 共用）。
 
 ### 负面提示词
 
