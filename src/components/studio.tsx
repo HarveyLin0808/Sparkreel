@@ -60,6 +60,8 @@ export function Studio() {
   const [sfxQuery, setSfxQuery] = useState("");
   const [sfxResults, setSfxResults] = useState<FreesoundClip[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 默认 pexels=true（保留原有入口），其余可选源未确认配置前不显示。
+  const [integrations, setIntegrations] = useState({ pexels: true, pixabay: false, jamendo: false, freesound: false });
 
   function playAudio(url: string) {
     audioRef.current?.pause();
@@ -110,6 +112,9 @@ export function Studio() {
       .catch((error) => setNotice(error.message));
     jsonRequest<{ voices: VoiceOption[] }>("/api/voices")
       .then((data) => setVoices(data.voices))
+      .catch(() => undefined);
+    jsonRequest<{ integrations: typeof integrations }>("/api/integrations")
+      .then((data) => setIntegrations(data.integrations))
       .catch(() => undefined);
   }, []);
 
@@ -668,7 +673,7 @@ export function Studio() {
                   <div className="asset-progress"><span style={{ width: `${completedAssets / active.scenes.length * 100}%` }} /><small>{completedAssets} 个素材已就绪</small></div>
                 </div>
                   <div className="scene-list">{active.scenes.map((scene) => (
-                  <SceneCard key={`${scene.id}-${scene.order}-${scene.duration}-${scene.narration}-${scene.prompt}`} scene={scene} onSave={updateScene} onUpload={upload} onPexels={fetchPexelsAsset} onPixabay={fetchPixabayAsset} onDelete={deleteScene} onAddAfter={addScene} onNotice={setNotice} />
+                  <SceneCard key={`${scene.id}-${scene.order}-${scene.duration}-${scene.narration}-${scene.prompt}`} scene={scene} onSave={updateScene} onUpload={upload} onPexels={fetchPexelsAsset} onPixabay={fetchPixabayAsset} showPexels={integrations.pexels} showPixabay={integrations.pixabay} onDelete={deleteScene} onAddAfter={addScene} onNotice={setNotice} />
                 ))}</div>
                 <div className="sticky-action">
                   <span>{completedAssets === active.scenes.length ? "全部镜头素材已经就绪" : `还需上传 ${active.scenes.length - completedAssets} 个镜头素材`}</span>
@@ -762,13 +767,18 @@ export function Studio() {
                       onChange={(event) => changeMusicVolume(Number(event.target.value) / 100)} />
                   </label>
                   <div className="audio-search">
-                    <input value={musicQuery} onChange={(event) => setMusicQuery(event.target.value)}
-                      onKeyDown={(event) => event.key === "Enter" && searchMusic()} placeholder="如 calm piano / emotional / cinematic" />
-                    <button type="button" className="secondary" onClick={searchMusic}>搜索配乐</button>
+                    {integrations.jamendo && (
+                      <>
+                        <input value={musicQuery} onChange={(event) => setMusicQuery(event.target.value)}
+                          onKeyDown={(event) => event.key === "Enter" && searchMusic()} placeholder="如 calm piano / emotional / cinematic" />
+                        <button type="button" className="secondary" onClick={searchMusic}>搜索配乐</button>
+                      </>
+                    )}
                     <label className="upload-music secondary">上传 BGM
                       <input type="file" accept="audio/mpeg,audio/wav" onChange={(event) => uploadMusic(event.target.files?.[0])} />
                     </label>
                   </div>
+                  {!integrations.jamendo && <p className="config-hint">未配置 Jamendo，可上传本地 BGM，或从下方外部素材库下载后上传。</p>}
                   {!!musicResults.length && (
                     <ul className="audio-results">
                       {musicResults.map((track) => (
@@ -782,6 +792,7 @@ export function Studio() {
                   )}
                 </div>
 
+                {integrations.freesound && (
                 <div className="audio-block">
                   <p className="section-label">音效（Freesound）</p>
                   <p className="empty-small">音效需要按画面节奏手动放置：试听满意后下载，再到分镜里作为素材上传或在后期使用。</p>
@@ -802,6 +813,7 @@ export function Studio() {
                     </ul>
                   )}
                 </div>
+                )}
 
                 <div className="audio-block">
                   <p className="section-label">外部素材库（无 API · 手动下载）</p>
@@ -860,12 +872,14 @@ function RenderProgress({ state }: { state: RenderState }) {
   );
 }
 
-function SceneCard({ scene, onSave, onUpload, onPexels, onPixabay, onDelete, onAddAfter, onNotice }: {
+function SceneCard({ scene, onSave, onUpload, onPexels, onPixabay, showPexels, showPixabay, onDelete, onAddAfter, onNotice }: {
   scene: Scene;
   onSave: (scene: Scene, payload: Partial<Scene>) => void;
   onUpload: (scene: Scene, file?: File) => void;
   onPexels: (scene: Scene) => void;
   onPixabay: (scene: Scene, kind: "video" | "illustration" | "photo") => void;
+  showPexels: boolean;
+  showPixabay: boolean;
   onDelete: (scene: Scene) => void;
   onAddAfter: (afterOrder?: number) => void;
   onNotice: (message: string) => void;
@@ -900,9 +914,9 @@ function SceneCard({ scene, onSave, onUpload, onPexels, onPixabay, onDelete, onA
         </label>
         <div className="scene-tools">
           <button type="button" onClick={() => navigator.clipboard.writeText(draft.prompt).then(() => onNotice("提示词已复制"))}>复制提示词</button>
-          <button type="button" onClick={() => onPexels(scene)}>Pexels 视频</button>
-          <button type="button" onClick={() => onPixabay(scene, "video")}>Pixabay 视频</button>
-          <button type="button" onClick={() => onPixabay(scene, "illustration")}>Pixabay 插画</button>
+          {showPexels && <button type="button" onClick={() => onPexels(scene)}>Pexels 视频</button>}
+          {showPixabay && <button type="button" onClick={() => onPixabay(scene, "video")}>Pixabay 视频</button>}
+          {showPixabay && <button type="button" onClick={() => onPixabay(scene, "illustration")}>Pixabay 插画</button>}
           <button type="button" onClick={() => onAddAfter(scene.order)}>在后面加镜头</button>
           <button type="button" className="danger" onClick={() => onDelete(scene)}>删除镜头</button>
           {scene.assetProvider === "PEXELS" && scene.sourceUrl && (
