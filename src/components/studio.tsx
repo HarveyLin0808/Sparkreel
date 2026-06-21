@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { MaterialPreference, Project, ProjectStatus, Scene, VisualStyle } from "@/lib/types";
 import { nextProjectStatus } from "@/lib/workflow";
+import { RENDER_STAGES, renderStageIndex, type RenderStageKey } from "@/lib/render-stages";
+
+type RenderState = { progress: number; stage?: RenderStageKey };
 
 const statusLabels: Record<ProjectStatus, string> = {
   DRAFT: "草稿",
@@ -47,6 +50,41 @@ export function Studio() {
   const [voiceName, setVoiceName] = useState("zh-CN-XiaoyiNeural");
   const [voiceRate, setVoiceRate] = useState("-5%");
   const [voices, setVoices] = useState<VoiceOption[]>([]);
+  const [renderState, setRenderState] = useState<RenderState | null>(null);
+  const pollStopRef = useRef<(() => void) | null>(null);
+
+  // 生成期间轮询项目进度，驱动步骤与进度条显示。
+  function startProgressPolling(projectId: string, initial?: RenderState) {
+    pollStopRef.current?.();
+    if (initial) setRenderState(initial);
+    let stopped = false;
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const data = await jsonRequest<{ project: Project }>(`/api/projects/${projectId}`);
+        if (stopped) return;
+        setRenderState({ progress: data.project.renderProgress ?? 0, stage: data.project.renderStage });
+      } catch {
+        /* 轮询失败忽略，等待主请求返回 */
+      }
+    };
+    const timer = setInterval(tick, 1500);
+    void tick();
+    const stop = () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+    pollStopRef.current = stop;
+    return stop;
+  }
+
+  function stopProgressPolling() {
+    pollStopRef.current?.();
+    pollStopRef.current = null;
+    setRenderState(null);
+  }
+
+  useEffect(() => () => pollStopRef.current?.(), []);
 
   useEffect(() => {
     jsonRequest<{ projects: Project[] }>("/api/projects")
@@ -82,6 +120,7 @@ export function Studio() {
       });
       syncProject(data.project);
       setNotice("脚本已生成，正在自动准备素材、配音和视频...");
+      startProgressPolling(data.project.id, { progress: 5, stage: "QUEUED" });
       const completed = await jsonRequest<{ project: Project; message: string }>(`/api/projects/${data.project.id}/auto`, {
         method: "POST",
       });
@@ -91,6 +130,7 @@ export function Studio() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "生成失败");
     } finally {
+      stopProgressPolling();
       setBusy(false);
     }
   }
@@ -99,6 +139,7 @@ export function Studio() {
     if (!project) return;
     setBusy(true);
     setNotice("正在自动搜索素材、生成旁白、字幕并合成视频...");
+    startProgressPolling(project.id, { progress: project.renderProgress ?? 5, stage: "QUEUED" });
     try {
       const data = await jsonRequest<{ project: Project; message: string }>(`/api/projects/${project.id}/auto`, {
         method: "POST",
@@ -111,6 +152,7 @@ export function Studio() {
       const refreshed = await jsonRequest<{ project: Project }>(`/api/projects/${project.id}`).catch(() => null);
       if (refreshed) syncProject(refreshed.project);
     } finally {
+      stopProgressPolling();
       setBusy(false);
     }
   }
@@ -271,6 +313,7 @@ export function Studio() {
   async function render() {
     if (!active) return;
     setBusy(true);
+    startProgressPolling(active.id, { progress: 15, stage: "QUEUED" });
     try {
       const data = await jsonRequest<{ project: Project; message: string }>(`/api/projects/${active.id}/render`, { method: "POST" });
       syncProject(data.project);
@@ -279,6 +322,7 @@ export function Studio() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "渲染失败");
     } finally {
+      stopProgressPolling();
       setBusy(false);
     }
   }
@@ -330,6 +374,8 @@ export function Studio() {
             <div className="status-pill"><span />{statusLabels[active.status]}</div>
           )}
         </header>
+
+        {renderState && <RenderProgress state={renderState} />}
 
         {!active ? (
           <section className="create-grid">
@@ -572,6 +618,40 @@ export function Studio() {
         {notice && <div className="toast" onClick={() => setNotice("")}>{notice}</div>}
       </section>
     </main>
+  );
+}
+
+function RenderProgress({ state }: { state: RenderState }) {
+  const finished = state.stage === "DONE" || state.progress >= 100;
+  const currentIndex = finished ? RENDER_STAGES.length - 1 : renderStageIndex(state.stage);
+  const progress = Math.min(100, Math.max(0, Math.round(state.progress)));
+  const currentLabel = RENDER_STAGES[currentIndex]?.label ?? "处理中";
+  return (
+    <section className="render-panel">
+      <div className="render-panel-head">
+        <div>
+          <p className="eyebrow">VIDEO GENERATION</p>
+          <h3>{finished ? "视频生成完成" : "正在生成视频"}</h3>
+          <p className="render-current">{finished ? "即将进入审核与发布" : `当前步骤：${currentLabel}`}</p>
+        </div>
+        <div className="render-percent">{progress}%</div>
+      </div>
+      <div className="render-bar"><span style={{ width: `${progress}%` }} /></div>
+      <ol className="render-steps">
+        {RENDER_STAGES.map((stage, index) => {
+          const status = finished || index < currentIndex ? "done" : index === currentIndex ? "active" : "pending";
+          return (
+            <li key={stage.key} className={`render-step ${status}`}>
+              <span className="render-step-dot">{status === "done" ? "✓" : index + 1}</span>
+              <span className="render-step-text">
+                <strong>{stage.label}</strong>
+                <small>{stage.hint}</small>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

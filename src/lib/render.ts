@@ -5,6 +5,7 @@ import { buildSrt } from "@/lib/content";
 import type { Project, RenderOutput } from "@/lib/types";
 import { getStorage } from "@/lib/storage";
 import { edgeSrtToAss } from "@/lib/subtitles";
+import type { RenderStageKey } from "@/lib/render-stages";
 
 function run(command: string, args: string[], stdin?: string) {
   return new Promise<void>((resolve, reject) => {
@@ -128,13 +129,14 @@ async function materialize(url: string, target: string) {
 
 export async function renderProject(
   project: Project,
-  onProgress: (progress: number) => Promise<void>,
+  onProgress: (progress: number, stage?: RenderStageKey) => Promise<void>,
   version = nextRenderVersion(project),
 ): Promise<RenderOutput> {
   const ffmpeg = process.env.FFMPEG_PATH ?? "ffmpeg";
   const root = path.join(process.cwd(), "storage", "renders", project.id);
   const temp = path.join(root, "work");
   await mkdir(temp, { recursive: true });
+  await onProgress(2, "NARRATION");
   let narration = path.join(temp, "narration.wav");
   let subtitleSrt = buildSrt(project.scenes);
   let hasNarration = false;
@@ -165,7 +167,7 @@ export async function renderProject(
   if (!edgeNarration && renderDuration > project.duration) {
     subtitleSrt = buildSrt(project.scenes.map((scene, index) => ({ ...scene, duration: sceneDurations[index] })));
   }
-  await onProgress(10);
+  await onProgress(10, "SCENES");
 
   const inputs: string[] = [];
   const filters: string[] = [];
@@ -182,9 +184,10 @@ export async function renderProject(
     filters.push(
       `[${index}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,fade=t=in:st=0:d=0.25,fade=t=out:st=${Math.max(sceneDuration - 0.25, 0)}:d=0.25[v${index}]`,
     );
-    await onProgress(15 + Math.round((index / project.scenes.length) * 30));
+    await onProgress(15 + Math.round((index / project.scenes.length) * 30), "SCENES");
   }
 
+  await onProgress(48, "CONCAT");
   const joined = project.scenes.map((_, index) => `[v${index}]`).join("");
   filters.push(`${joined}concat=n=${project.scenes.length}:v=1:a=0[video]`);
   const baseVideo = path.join(temp, "base.mp4");
@@ -194,7 +197,7 @@ export async function renderProject(
     "-map", "[video]", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
     baseVideo,
   ]);
-  await onProgress(55);
+  await onProgress(55, "SUBTITLES");
 
   const subtitleFile = path.join(temp, "captions.ass");
   await writeFile(subtitleFile, edgeSrtToAss(subtitleSrt), "utf8");
@@ -205,7 +208,7 @@ export async function renderProject(
     "-vf", `subtitles='${subtitlePath}'`,
     "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-an", subtitled,
   ]);
-  await onProgress(70);
+  await onProgress(70, "MUX");
 
   const fileName = safeVideoFileName(project.title, version);
   const output = path.join(root, fileName);
@@ -218,7 +221,7 @@ export async function renderProject(
   } else {
     await copyFile(subtitled, output);
   }
-  await onProgress(100);
+  await onProgress(100, "DONE");
   await rm(temp, { recursive: true, force: true });
   return {
     version,

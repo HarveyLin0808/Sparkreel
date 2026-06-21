@@ -18,6 +18,7 @@ export async function POST(_: Request, context: Context) {
   }
   project.status = "RENDERING";
   project.renderProgress = 15;
+  project.renderStage = "QUEUED";
   project.renderError = undefined;
   ensureRenderHistory(project);
   const version = nextRenderVersion(project);
@@ -36,8 +37,9 @@ export async function POST(_: Request, context: Context) {
 
   if (process.env.FFMPEG_PATH) {
     try {
-      const output = await renderProject(project, async (progress) => {
+      const output = await renderProject(project, async (progress, stage) => {
         project.renderProgress = progress;
+        if (stage) project.renderStage = stage;
         project.updatedAt = new Date().toISOString();
         await projectStore.save(project);
       }, version);
@@ -45,12 +47,14 @@ export async function POST(_: Request, context: Context) {
       project.outputUrl = output.url;
       project.outputDuration = output.duration;
       project.renderProgress = 100;
+      project.renderStage = "DONE";
       project.status = "REVIEW";
       project.updatedAt = new Date().toISOString();
       await projectStore.save(project);
       return NextResponse.json({ ok: true, project, mode: "direct", message: `第 ${output.version} 版 MP4 已生成，旧版本已保留。` });
     } catch (error) {
       project.status = "READY_TO_RENDER";
+      project.renderStage = undefined;
       project.renderError = error instanceof Error ? error.message : "渲染失败";
       project.updatedAt = new Date().toISOString();
       await projectStore.save(project);
@@ -61,6 +65,7 @@ export async function POST(_: Request, context: Context) {
   // Development completes as a review preview so the workflow can be tested
   // without native media tools.
   project.renderProgress = 100;
+  project.renderStage = "DONE";
   project.status = "REVIEW";
   project.outputUrl = undefined;
   project.updatedAt = new Date().toISOString();

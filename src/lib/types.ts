@@ -1,3 +1,5 @@
+import type { RenderStageKey } from "@/lib/render-stages";
+
 export const PROJECT_STATUSES = [
   "DRAFT",
   "SCRIPT_CONFIRMED",
@@ -84,6 +86,7 @@ export interface Project extends ProjectInput, ContentPlan {
   createdAt: string;
   updatedAt: string;
   renderProgress: number;
+  renderStage?: RenderStageKey;
   renderError?: string;
   outputUrl?: string;
   outputDuration?: number;

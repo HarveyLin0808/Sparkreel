@@ -16,11 +16,14 @@ export async function POST(_: Request, context: Context) {
 
     project.status = "WAITING_ASSETS";
     project.renderProgress = 5;
+    project.renderStage = "QUEUED";
     project.renderError = undefined;
     ensureRenderHistory(project);
     const version = nextRenderVersion(project);
     await projectStore.save(project);
 
+    project.renderStage = "SCRIPT";
+    await projectStore.save(project);
     const expanded = await expandNarration(project.scenes, project.duration);
     if (expanded) {
       project.scenes.forEach((scene, index) => {
@@ -31,6 +34,8 @@ export async function POST(_: Request, context: Context) {
       await projectStore.save(project);
     }
 
+    project.renderStage = "ASSETS";
+    await projectStore.save(project);
     const usedPexelsIds = new Set<number>();
     for (let index = 0; index < project.scenes.length; index++) {
       const scene = project.scenes[index];
@@ -62,9 +67,11 @@ export async function POST(_: Request, context: Context) {
     }
 
     project.status = "RENDERING";
+    project.renderStage = "NARRATION";
     await projectStore.save(project);
-    const output = await renderProject(project, async (progress) => {
+    const output = await renderProject(project, async (progress, stage) => {
       project.renderProgress = 30 + Math.round(progress * 0.7);
+      if (stage) project.renderStage = stage;
       project.updatedAt = new Date().toISOString();
       await projectStore.save(project);
     }, version);
@@ -73,6 +80,7 @@ export async function POST(_: Request, context: Context) {
     project.outputDuration = output.duration;
     project.status = "REVIEW";
     project.renderProgress = 100;
+    project.renderStage = "DONE";
     project.updatedAt = new Date().toISOString();
     await projectStore.save(project);
     return NextResponse.json({ ok: true, project, message: `素材、旁白、字幕和第 ${output.version} 版 MP4 已生成，旧版本已保留。` });
@@ -81,6 +89,7 @@ export async function POST(_: Request, context: Context) {
     const project = await projectStore.get(id);
     if (project) {
       project.status = project.scenes.some((scene) => scene.assetUrl) ? "WAITING_ASSETS" : "STORYBOARD_CONFIRMED";
+      project.renderStage = undefined;
       project.renderError = error instanceof Error ? error.message : "一键生成失败";
       project.updatedAt = new Date().toISOString();
       await projectStore.save(project);

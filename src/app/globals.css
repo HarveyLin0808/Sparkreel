@@ -55,6 +55,25 @@ textarea, input, select { width: 100%; border: 1px solid #d9d6cd; background: #f
 .publish-grid { display: grid; grid-template-columns: 370px minmax(0, 1fr); gap: 22px; }.phone-panel { padding: 24px; }.phone { width: 230px; aspect-ratio: 9/17.5; margin: auto; border: 8px solid #192521; border-radius: 28px; overflow: hidden; background: #202b27; }.phone-stage { width: 100%; height: 100%; position: relative; }.phone-stage img, .phone-stage video { width: 100%; height: 100%; object-fit: cover; }.preview-placeholder { height: 100%; display: grid; place-content: center; text-align: center; color: #9fb3ac; background: radial-gradient(circle at 50% 35%,#42685b,#172b24 70%); }.preview-placeholder span { font: 40px Georgia; }.preview-placeholder p { font-size: 10px; }.caption-preview { position: absolute; bottom: 18%; left: 8%; right: 8%; color: white; font-size: 13px; font-weight: 700; text-align: center; text-shadow: 0 2px 8px black; }.render-info { display: flex; justify-content: center; gap: 12px; margin: 18px 0; color: var(--muted); font-size: 10px; }.download-link { display: block; margin-top: 10px; text-align: center; text-decoration: none; }.platform-copy { border: 1px solid var(--line); border-radius: 12px; padding: 15px; margin-bottom: 12px; }.platform-copy header { display: flex; justify-content: space-between; }.platform-copy h3 { font-size: 14px; }.platform-copy p { color: var(--muted); white-space: pre-wrap; font-size: 11px; line-height: 1.7; }.platform-copy div span { display: inline-block; color: var(--green); background: var(--green-2); padding: 4px 7px; border-radius: 99px; margin-right: 5px; font-size: 9px; }.export-note { color: var(--muted); font-size: 10px; line-height: 1.6; text-align: center; }
 .rerender-button { margin-top: 8px; }.render-history { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }.render-history > strong { display: block; margin-bottom: 8px; font-size: 11px; }.render-history a { display: flex; justify-content: space-between; gap: 8px; padding: 9px 10px; margin-top: 6px; border-radius: 8px; color: var(--green); background: #f1f6f2; text-decoration: none; font-size: 10px; }.render-history small { color: var(--muted); }
 .toast { position: fixed; right: 24px; bottom: 24px; max-width: 430px; color: white; background: #1d3d33; padding: 13px 18px; border-radius: 10px; box-shadow: var(--shadow); font-size: 12px; z-index: 50; }
+.render-panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin-bottom: 24px; box-shadow: var(--shadow); }
+.render-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.render-panel-head h3 { margin: 4px 0 4px; font: 500 20px Georgia, "Songti SC", serif; }
+.render-current { margin: 0; color: var(--muted); font-size: 12px; }
+.render-percent { font: 700 22px Georgia; color: var(--green); }
+.render-bar { height: 8px; border-radius: 99px; background: var(--green-2); overflow: hidden; margin: 14px 0 18px; }
+.render-bar span { display: block; height: 100%; background: var(--coral); border-radius: inherit; transition: width .5s ease; }
+.render-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.render-step { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid transparent; }
+.render-step-dot { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-content: center; font-size: 11px; font-weight: 700; border: 1px solid var(--line); color: var(--muted); background: white; }
+.render-step-text { display: flex; flex-direction: column; line-height: 1.4; min-width: 0; }
+.render-step-text strong { font-size: 12px; color: var(--ink); }
+.render-step-text small { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.render-step.pending { opacity: .55; }
+.render-step.active { background: #f3f8f4; border-color: var(--green-2); }
+.render-step.active .render-step-dot { border-color: var(--coral); color: white; background: var(--coral); animation: render-pulse 1.2s ease-in-out infinite; }
+.render-step.active .render-step-text strong { color: var(--green); }
+.render-step.done .render-step-dot { border-color: var(--green); color: white; background: var(--green); }
+@keyframes render-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(215, 119, 85, .5); } 50% { box-shadow: 0 0 0 6px rgba(215, 119, 85, 0); } }
 .scene-tools { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
 .scene-tools button { border: 0; border-radius: 7px; padding: 6px 9px; color: var(--green); background: var(--green-2); font-size: 10px; }
 .scene-tools button.danger { color: #a84435; background: #f4dfda; }

@@ -12,8 +12,9 @@ const worker = new Worker(
     if (!project) throw new Error("项目不存在");
     try {
       ensureRenderHistory(project);
-      const output = await renderProject(project, async (progress) => {
+      const output = await renderProject(project, async (progress, stage) => {
         project.renderProgress = progress;
+        if (stage) project.renderStage = stage;
         project.updatedAt = new Date().toISOString();
         await projectStore.save(project);
         await job.updateProgress(progress);
@@ -23,10 +24,12 @@ const worker = new Worker(
       project.outputDuration = output.duration;
       project.status = "REVIEW";
       project.renderProgress = 100;
+      project.renderStage = "DONE";
       await projectStore.save(project);
       return { outputUrl: output.url };
     } catch (error) {
       project.status = "READY_TO_RENDER";
+      project.renderStage = undefined;
       project.renderError = error instanceof Error ? error.message : "渲染失败";
       await projectStore.save(project);
       throw error;
