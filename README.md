@@ -4,6 +4,8 @@
 
 **输入一个话题，自动生成内容角度 → 口播脚本 → 分镜 → 旁白配音 → 字幕 → 竖屏成片 → 平台发布文案**
 
+<sub>AI 短视频 · AI 共鸣短视频 · 一键生成 · 文案生成 · 配音字幕 · 竖屏成片 · 抖音 / 小红书 / 视频号<br/>AI short video · text-to-video · AI video generator · script & storyboard · TTS narration · auto subtitles · vertical 9:16 video · Douyin / Xiaohongshu</sub>
+
 简体中文 ·
 [功能特性](#-功能特性) ·
 [快速开始](#-快速开始) ·
