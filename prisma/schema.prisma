@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  title     String
+  status    String   @default("DRAFT")
+  snapshot  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scripts        ScriptVersion[]
+  scenes         Scene[]
+  renderJobs     RenderJob[]
+  platformCopies PlatformCopy[]
+
+  @@index([status, updatedAt])
+}
+
+model ScriptVersion {
+  id        String   @id @default(uuid())
+  projectId String
+  version   Int
+  title     String
+  hook      String
+  content   String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+}
+
+model Scene {
+  id             String   @id @default(uuid())
+  projectId      String
+  order          Int
+  duration       Int
+  narration      String
+  subtitle       String
+  composition    String
+  motion         String
+  prompt         String
+  negativePrompt String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assets         MediaAsset[]
+
+  @@unique([projectId, order])
+}
+
+model MediaAsset {
+  id        String   @id @default(uuid())
+  sceneId   String?
+  kind      String
+  storageKey String
+  mimeType  String
+  size      Int
+  width     Int?
+  height    Int?
+  duration  Float?
+  createdAt DateTime @default(now())
+  scene     Scene?   @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+}
+
+model VoiceTrack {
+  id         String   @id @default(uuid())
+  projectId  String
+  provider   String
+  voice      String
+  storageKey String
+  duration   Float?
+  createdAt  DateTime @default(now())
+}
+
+model RenderJob {
+  id        String   @id @default(uuid())
+  projectId String
+  status    String
+  progress  Int      @default(0)
+  error     String?
+  outputKey String?
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+model PlatformCopy {
+  id        String   @id @default(uuid())
+  projectId String
+  platform  String
+  title     String
+  body      String
+  tags      String[]
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, platform])
+}
+
+model ModelConfig {
+  id          String   @id
+  provider    String   @unique
+  model       String
+  enabled     Boolean  @default(false)
+  temperature Float    @default(0.8)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
